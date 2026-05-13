@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="gui.AcademicFrameController"
+      spacing="10" style="-fx-padding:15;" prefWidth="700">
+
+    <Label text="G9 Prototype — Client"
+           style="-fx-font-size:16px;-fx-font-weight:bold;"/>
+
+    <Button text="Load All Orders" onAction="#loadOrders"
+            style="-fx-background-color:#27ae60;-fx-text-fill:white;-fx-font-weight:bold;"/>
+
+    <TableView fx:id="tableOrders" prefHeight="220">
+        <columns>
+            <TableColumn fx:id="colNum"      text="Order #"     prefWidth="80"/>
+            <TableColumn fx:id="colDate"     text="Order Date"  prefWidth="110"/>
+            <TableColumn fx:id="colVisitors" text="Visitors"    prefWidth="80"/>
+            <TableColumn fx:id="colCode"     text="Conf. Code"  prefWidth="90"/>
+            <TableColumn fx:id="colSub"      text="Sub. ID"     prefWidth="80"/>
+            <TableColumn fx:id="colPlaced"   text="Placed Date" prefWidth="110"/>
+        </columns>
+    </TableView>
+
+    <TitledPane text="Update order_date and number_of_visitors" collapsible="false">
+        <GridPane hgap="10" vgap="8" style="-fx-padding:8;">
+            <Label text="Order Number:"         GridPane.columnIndex="0" GridPane.rowIndex="0"/>
+            <TextField fx:id="txtOrderNum"       GridPane.columnIndex="1" GridPane.rowIndex="0" prefWidth="150"/>
+            <Label text="New Date (YYYY-MM-DD):" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
+            <TextField fx:id="txtNewDate"        GridPane.columnIndex="1" GridPane.rowIndex="1" prefWidth="150"/>
+            <Label text="New Visitors:"          GridPane.columnIndex="0" GridPane.rowIndex="2"/>
+            <TextField fx:id="txtNewVisitors"    GridPane.columnIndex="1" GridPane.rowIndex="2" prefWidth="150"/>
+            <Button text="Update" onAction="#updateOrder"
+                    GridPane.columnIndex="1" GridPane.rowIndex="3"
+                    style="-fx-background-color:#e67e22;-fx-text-fill:white;-fx-font-weight:bold;"/>
+        </GridPane>
+    </TitledPane>
+
+    <Label fx:id="lblResult" text="" style="-fx-font-style:italic;"/>
+</VBox>
