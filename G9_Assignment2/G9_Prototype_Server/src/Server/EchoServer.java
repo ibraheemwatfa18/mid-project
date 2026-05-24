@@ -1,4 +1,5 @@
 package Server;
+
 import logic.Message;
 import logic.Order;
 import ocsf.server.AbstractServer;
@@ -51,13 +52,23 @@ public class EchoServer extends AbstractServer {
         String ip   = client.getInetAddress().getHostAddress();
         String host = client.getInetAddress().getHostName();
         System.out.println("Client connected | IP: " + ip + " | Host: " + host);
-        // Update the server GUI
-        ServerPortFrameController.setClientInfo(ip, host, "Connected");
+        // CHANGED: addClient adds a new row to the table
+        ServerPortFrameController.addClient(ip, host);
     }
 
     @Override
     protected synchronized void clientDisconnected(ConnectionToClient client) {
-        System.out.println("Client disconnected.");
-        ServerPortFrameController.setClientInfo("-", "-", "Disconnected");
+        String ip = client.getInetAddress().getHostAddress();
+        System.out.println("Client disconnected | IP: " + ip);
+        // CHANGED: removeClient updates that row's status to "Disconnected"
+        ServerPortFrameController.removeClient(ip);
+    }
+
+    // NEW: catches unexpected disconnects (client crashes, network drops)
+    @Override
+    protected synchronized void clientException(ConnectionToClient client, Throwable exception) {
+        String ip = client.getInetAddress().getHostAddress();
+        System.out.println("Client lost connection | IP: " + ip);
+        ServerPortFrameController.removeClient(ip);
     }
 }
