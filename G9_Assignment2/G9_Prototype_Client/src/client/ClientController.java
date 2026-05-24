@@ -17,6 +17,10 @@ public class ClientController implements ChatIF {
         }
     }
 
+    public void disconnect() {
+        try { client.closeConnection(); } catch (IOException e) { e.printStackTrace(); }
+    }
+
     // called by the GUI with a Message object
     public void accept(Message msg) {
         client.handleMessageFromClientUI(msg);

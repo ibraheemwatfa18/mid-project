@@ -98,7 +98,10 @@ public class AcademicFrameController {
         }
     }
 
-    public void getExitBtn(ActionEvent event) { System.exit(0); }
+    public void getExitBtn(ActionEvent event) {
+        if (ClientUI.chat != null) ClientUI.chat.disconnect();
+        javafx.application.Platform.exit();
+    }
 
     public void start(Stage primaryStage) throws Exception {
         Parent root = FXMLLoader.load(getClass().getResource("/gui/AcademicFrame.fxml"));

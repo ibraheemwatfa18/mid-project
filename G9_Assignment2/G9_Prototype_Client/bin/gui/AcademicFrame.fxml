@@ -39,4 +39,7 @@
     </VBox>
 
     <Label fx:id="lblResult" text="" style="-fx-font-style:italic; -fx-text-fill: #27ae60; -fx-font-weight:bold;"/>
+
+    <Button text="Exit" onAction="#getExitBtn"
+            style="-fx-background-color:#e53935; -fx-text-fill:white; -fx-font-weight:bold; -fx-background-radius:5; -fx-padding: 10 30;"/>
 </VBox>
