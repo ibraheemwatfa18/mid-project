@@ -19,20 +19,19 @@
     </HBox>
 
     <VBox spacing="8" style="-fx-padding: 15; -fx-background-color: white; -fx-background-radius: 8; -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.1), 10, 0, 0, 2);">
-        <Label text="Connected Client" style="-fx-font-size:14px; -fx-font-weight:bold; -fx-text-fill: #1b5e20;"/>
-        <GridPane hgap="15" vgap="8" style="-fx-padding:5;">
-            <Label text="IP:"        GridPane.columnIndex="0" GridPane.rowIndex="0" style="-fx-font-weight:bold; -fx-text-fill: #558b2f;"/>
-            <Label fx:id="lblIP"     GridPane.columnIndex="1" GridPane.rowIndex="0" text="—" style="-fx-text-fill: #2e7d32;"/>
-            <Label text="Host:"      GridPane.columnIndex="0" GridPane.rowIndex="1" style="-fx-font-weight:bold; -fx-text-fill: #558b2f;"/>
-            <Label fx:id="lblHost"   GridPane.columnIndex="1" GridPane.rowIndex="1" text="—" style="-fx-text-fill: #2e7d32;"/>
-            <Label text="Status:"    GridPane.columnIndex="0" GridPane.rowIndex="2" style="-fx-font-weight:bold; -fx-text-fill: #558b2f;"/>
-            <Label fx:id="lblStatus" GridPane.columnIndex="1" GridPane.rowIndex="2" text="Not connected" style="-fx-text-fill: #f57c00;"/>
-        </GridPane>
+        <Label text="Connected Clients" style="-fx-font-size:14px; -fx-font-weight:bold; -fx-text-fill: #1b5e20;"/>
+        <TableView fx:id="clientTable" prefHeight="180">
+            <columns>
+                <TableColumn fx:id="colIP"     text="IP Address"  prefWidth="150"/>
+                <TableColumn fx:id="colHost"   text="Host Name"   prefWidth="150"/>
+                <TableColumn fx:id="colStatus" text="Status"      prefWidth="120"/>
+            </columns>
+        </TableView>
     </VBox>
 
     <VBox spacing="5" style="-fx-padding: 15; -fx-background-color: white; -fx-background-radius: 8; -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.1), 10, 0, 0, 2);">
         <Label text="Connection Log" style="-fx-font-size:14px; -fx-font-weight:bold; -fx-text-fill: #1b5e20;"/>
-        <TextArea fx:id="txtLog" prefHeight="120" editable="false" 
+        <TextArea fx:id="txtLog" prefHeight="120" editable="false"
                   style="-fx-control-inner-background: #f1f8e9; -fx-background-radius: 5; -fx-border-color: #aed581; -fx-border-radius: 5;"/>
     </VBox>
 </VBox>
