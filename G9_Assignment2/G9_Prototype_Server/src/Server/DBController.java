@@ -8,9 +8,9 @@ public class DBController {
     private static DBController instance = null;
     private Connection connection;
 
-    private static final String DB_URL  = "jdbc:mysql://localhost/park_db?serverTimezone=UTC";
+    private static final String DB_URL  = "jdbc:mysql://localhost:3306/park_db?serverTimezone=UTC";
     private static final String DB_USER = "root";
-    private static String dbPass = "";
+    private static String dbPass = "Aa123456";
 
     public static void setPassword(String pass) { dbPass = pass; }
 
