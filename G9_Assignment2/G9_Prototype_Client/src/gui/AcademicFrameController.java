@@ -1,4 +1,5 @@
 package gui;
+
 import client.ChatClient;
 import client.ClientUI;
 import logic.Message;
@@ -10,6 +11,9 @@ import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.stage.Stage;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 
 public class AcademicFrameController {
@@ -47,12 +51,48 @@ public class AcademicFrameController {
 
     public void updateOrder(ActionEvent event) {
         try {
-            int num = Integer.parseInt(txtOrderNum.getText().trim());
+            // Validate order number is not empty
+            String orderNumText = txtOrderNum.getText().trim();
+            if (orderNumText.isEmpty()) {
+                lblResult.setText("Please enter an order number.");
+                return;
+            }
+            int num = Integer.parseInt(orderNumText);
+
+            // NEW: Validate date format AND must be a future date
             String date = txtNewDate.getText().trim();
-            int vis = Integer.parseInt(txtNewVisitors.getText().trim());
+            if (date.isEmpty()) {
+                lblResult.setText("Please enter a date.");
+                return;
+            }
+            try {
+                LocalDate newDate = LocalDate.parse(date, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+                if (!newDate.isAfter(LocalDate.now())) {
+                    lblResult.setText("Error: Date must be a future date!");
+                    return;
+                }
+            } catch (DateTimeParseException e) {
+                lblResult.setText("Error: Invalid date format! Use YYYY-MM-DD.");
+                return;
+            }
+
+            // NEW: Validate visitors must be between 1 and 15
+            String visText = txtNewVisitors.getText().trim();
+            if (visText.isEmpty()) {
+                lblResult.setText("Please enter number of visitors.");
+                return;
+            }
+            int vis = Integer.parseInt(visText);
+            if (vis < 1 || vis > 15) {
+                lblResult.setText("Error: Visitors must be between 1 and 15!");
+                return;
+            }
+
+            // All validations passed — send update to server
             Order o = new Order(num, date, vis, 0, 0, "");
             ClientUI.chat.accept(new Message("UPDATE_ORDER", o));
             lblResult.setText(ChatClient.lastResult);
+
         } catch (NumberFormatException e) {
             lblResult.setText("Please enter valid numbers.");
         }
