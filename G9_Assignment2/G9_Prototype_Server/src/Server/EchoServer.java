@@ -51,23 +51,23 @@ public class EchoServer extends AbstractServer {
     protected void clientConnected(ConnectionToClient client) {
         String ip   = client.getInetAddress().getHostAddress();
         String host = client.getInetAddress().getHostName();
+        client.setInfo("ip", ip);   // cache before socket can be nulled on disconnect
         System.out.println("Client connected | IP: " + ip + " | Host: " + host);
-        // CHANGED: addClient adds a new row to the table
         ServerPortFrameController.addClient(ip, host);
     }
 
     @Override
     protected synchronized void clientDisconnected(ConnectionToClient client) {
-        String ip = client.getInetAddress().getHostAddress();
+        String ip = (String) client.getInfo("ip");
+        if (ip == null) return;
         System.out.println("Client disconnected | IP: " + ip);
-        // CHANGED: removeClient updates that row's status to "Disconnected"
         ServerPortFrameController.removeClient(ip);
     }
 
-    // NEW: catches unexpected disconnects (client crashes, network drops)
     @Override
     protected synchronized void clientException(ConnectionToClient client, Throwable exception) {
-        String ip = client.getInetAddress().getHostAddress();
+        String ip = (String) client.getInfo("ip");
+        if (ip == null) return;
         System.out.println("Client lost connection | IP: " + ip);
         ServerPortFrameController.removeClient(ip);
     }

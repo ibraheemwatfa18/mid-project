@@ -10,7 +10,9 @@ public class DBController {
 
     private static final String DB_URL  = "jdbc:mysql://localhost/park_db?serverTimezone=UTC";
     private static final String DB_USER = "root";
-    private static final String DB_PASS = "Aa123456";
+    private static String dbPass = "";
+
+    public static void setPassword(String pass) { dbPass = pass; }
 
     private DBController() {}
 
@@ -22,7 +24,7 @@ public class DBController {
     public boolean connect() {
         try {
             Class.forName("com.mysql.cj.jdbc.Driver");
-            connection = DriverManager.getConnection(DB_URL, DB_USER, DB_PASS);
+            connection = DriverManager.getConnection(DB_URL, DB_USER, dbPass);
             System.out.println("DB connected!");
             return true;
         } catch (Exception e) {

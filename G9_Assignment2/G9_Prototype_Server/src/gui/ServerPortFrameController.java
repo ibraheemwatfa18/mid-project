@@ -51,18 +51,11 @@ public class ServerPortFrameController {
         });
     }
 
-    // NEW: finds client by IP and changes status to "Disconnected"
     public static void removeClient(String ip) {
         if (instance == null) return;
         Platform.runLater(() -> {
-            for (int i = 0; i < clientList.size(); i++) {
-                if (clientList.get(i)[0].equals(ip)) {
-                    clientList.get(i)[2] = "Disconnected";
-                    instance.clientTable.refresh();
-                    instance.txtLog.appendText("Client disconnected: " + ip + "\n");
-                    break;
-                }
-            }
+            clientList.removeIf(row -> row[0].equals(ip));
+            instance.txtLog.appendText("Client disconnected: " + ip + "\n");
         });
     }
 
