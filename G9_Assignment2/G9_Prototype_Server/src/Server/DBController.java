@@ -10,7 +10,7 @@ public class DBController {
 
     private static final String DB_URL  = "jdbc:mysql://localhost:3306/park_db?serverTimezone=UTC";
     private static final String DB_USER = "root";
-    private static String dbPass = "Aa123456";
+    private static String dbPass = "A";
 
     public static void setPassword(String pass) { dbPass = pass; }
 
