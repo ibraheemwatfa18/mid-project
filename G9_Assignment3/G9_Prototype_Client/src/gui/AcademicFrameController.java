@@ -4,54 +4,112 @@ import client.ChatClient;
 import client.ClientUI;
 import logic.Message;
 import logic.Order;
+import logic.OrderDetail;
+import logic.UserSession;
+import javafx.application.Platform;
+import javafx.beans.property.SimpleIntegerProperty;
+import javafx.beans.property.SimpleStringProperty;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.stage.Modality;
 import javafx.stage.Stage;
+
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 
+/**
+ * controller for the academic/admin screen ({@code AcademicFrame.fxml}).
+ *
+ * <p>used by DEPARTMENT_MANAGER and SERVICE_REP. loads live orders via {@code GET_LIVE_ORDERS}
+ * and lets the user update visit date or visitor count for any order by ID.
+ */
 public class AcademicFrameController {
 
-    @FXML private TableView<Order>           tableOrders;
-    @FXML private TableColumn<Order,Integer> colNum;
-    @FXML private TableColumn<Order,String>  colDate;
-    @FXML private TableColumn<Order,Integer> colVisitors;
-    @FXML private TableColumn<Order,Integer> colCode;
-    @FXML private TableColumn<Order,Integer> colSub;
-    @FXML private TableColumn<Order,String>  colPlaced;
+    @FXML private Label lblUserName;
+    @FXML private Label lblUserRole;
+
+    // ── live-orders table ─────────────────────────────────────────────────────
+    @FXML private TableView<OrderDetail>            tableOrders;
+    @FXML private TableColumn<OrderDetail, Integer> colId;
+    @FXML private TableColumn<OrderDetail, String>  colPark;
+    @FXML private TableColumn<OrderDetail, String>  colVisitorId;
+    @FXML private TableColumn<OrderDetail, String>  colDate;
+    @FXML private TableColumn<OrderDetail, String>  colTime;
+    @FXML private TableColumn<OrderDetail, Integer> colVisitors;
+    @FXML private TableColumn<OrderDetail, String>  colType;
+    @FXML private TableColumn<OrderDetail, String>  colStatus;
+    @FXML private TableColumn<OrderDetail, String>  colBookedOn;
+
+    // ── update-order form ─────────────────────────────────────────────────────
     @FXML private TextField txtOrderNum;
     @FXML private TextField txtNewDate;
     @FXML private TextField txtNewVisitors;
-    @FXML private Label lblResult;
+    @FXML private Label     lblResult;
 
+    /**
+     * populates header labels from {@link UserSession} and wires all column cell-value factories.
+     */
     @FXML
     public void initialize() {
-        colNum.setCellValueFactory(d -> new javafx.beans.property.SimpleIntegerProperty(d.getValue().getOrderNumber()).asObject());
-        colDate.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(d.getValue().getOrderDate()));
-        colVisitors.setCellValueFactory(d -> new javafx.beans.property.SimpleIntegerProperty(d.getValue().getNumberOfVisitors()).asObject());
-        colCode.setCellValueFactory(d -> new javafx.beans.property.SimpleIntegerProperty(d.getValue().getConfirmationCode()).asObject());
-        colSub.setCellValueFactory(d -> new javafx.beans.property.SimpleIntegerProperty(d.getValue().getSubscriberId()).asObject());
-        colPlaced.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(d.getValue().getDateOfPlacingOrder()));
+        UserSession session = UserSession.getInstance();
+        if (session != null && session.getRole() != null) {
+            lblUserName.setText(session.getFullName());
+            lblUserRole.setText(session.getRole());
+        }
+
+        colId.setCellValueFactory(d ->
+            new SimpleIntegerProperty(d.getValue().getId()).asObject());
+        colPark.setCellValueFactory(d ->
+            new SimpleStringProperty(d.getValue().getParkName()));
+        colVisitorId.setCellValueFactory(d ->
+            new SimpleStringProperty(d.getValue().getVisitorId()));
+        colDate.setCellValueFactory(d ->
+            new SimpleStringProperty(d.getValue().getVisitDate()));
+        colTime.setCellValueFactory(d ->
+            new SimpleStringProperty(d.getValue().getVisitTime()));
+        colVisitors.setCellValueFactory(d ->
+            new SimpleIntegerProperty(d.getValue().getNumVisitors()).asObject());
+        colType.setCellValueFactory(d ->
+            new SimpleStringProperty(d.getValue().getOrderType()));
+        colStatus.setCellValueFactory(d ->
+            new SimpleStringProperty(d.getValue().getStatus()));
+        colBookedOn.setCellValueFactory(d ->
+            new SimpleStringProperty(d.getValue().getCreatedAt()));
     }
 
+    /**
+     * loads all live orders from the server and populates the table, newest first.
+     *
+     * @param event the button-click event
+     */
     public void loadOrders(ActionEvent event) {
-        ClientUI.chat.accept(new Message("GET_ALL_ORDERS", null));
-        List<Order> orders = ChatClient.lastOrderList;
+        lblResult.setText("Loading…");
+        ChatClient.lastLiveOrders = null;
+        ClientUI.chat.accept(new Message("GET_LIVE_ORDERS", null));
+        List<OrderDetail> orders = ChatClient.lastLiveOrders;
         if (orders != null) {
             tableOrders.getItems().setAll(orders);
             lblResult.setText("Loaded " + orders.size() + " orders.");
+        } else {
+            tableOrders.getItems().clear();
+            lblResult.setText("Could not load orders — is the server running?");
         }
     }
 
+    /**
+     * validates and sends an {@code UPDATE_ORDER} request.
+     * date must be a future {@code YYYY-MM-DD}; visitors must be 1–15.
+     *
+     * @param event the button-click event
+     */
     public void updateOrder(ActionEvent event) {
         try {
-            // Validate order number is not empty
             String orderNumText = txtOrderNum.getText().trim();
             if (orderNumText.isEmpty()) {
                 lblResult.setText("Please enter an order number.");
@@ -59,12 +117,8 @@ public class AcademicFrameController {
             }
             int num = Integer.parseInt(orderNumText);
 
-            // NEW: Validate date format AND must be a future date
             String date = txtNewDate.getText().trim();
-            if (date.isEmpty()) {
-                lblResult.setText("Please enter a date.");
-                return;
-            }
+            if (date.isEmpty()) { lblResult.setText("Please enter a date."); return; }
             try {
                 LocalDate newDate = LocalDate.parse(date, DateTimeFormatter.ofPattern("yyyy-MM-dd"));
                 if (!newDate.isAfter(LocalDate.now())) {
@@ -72,11 +126,10 @@ public class AcademicFrameController {
                     return;
                 }
             } catch (DateTimeParseException e) {
-                lblResult.setText("Error: Invalid date format! Use YYYY-MM-DD.");
+                lblResult.setText("Error: Invalid date format — use YYYY-MM-DD.");
                 return;
             }
 
-            // NEW: Validate visitors must be between 1 and 15
             String visText = txtNewVisitors.getText().trim();
             if (visText.isEmpty()) {
                 lblResult.setText("Please enter number of visitors.");
@@ -88,7 +141,6 @@ public class AcademicFrameController {
                 return;
             }
 
-            // All validations passed — send update to server
             Order o = new Order(num, date, vis, 0, 0, "");
             ClientUI.chat.accept(new Message("UPDATE_ORDER", o));
             lblResult.setText(ChatClient.lastResult);
@@ -98,15 +150,118 @@ public class AcademicFrameController {
         }
     }
 
-    public void getExitBtn(ActionEvent event) {
-        if (ClientUI.chat != null) ClientUI.chat.disconnect();
-        javafx.application.Platform.exit();
+    /**
+     * shows a role-specific help dialog (DEPARTMENT_MANAGER vs SERVICE_REP content differs).
+     *
+     * @param event the button-click event
+     */
+    public void handleHelp(ActionEvent event) {
+        UserSession s = UserSession.getInstance();
+        String role = (s != null ? s.getRole() : "DEPARTMENT_MANAGER");
+        String content;
+        if ("SERVICE_REP".equals(role)) {
+            content =
+                "SERVICE REPRESENTATIVE — QUICK GUIDE\n\n" +
+                "MANAGING ORDERS\n" +
+                "  • Click 'Load All Orders' to view all live bookings in the system.\n" +
+                "  • Columns: Order #, Park, Visitor ID, Date, Time, Visitors, Type, Status, Booked On.\n" +
+                "  • To update an order: enter the Order Number, new Date (YYYY-MM-DD),\n" +
+                "    and new visitor count (1–15), then click 'Update Order'.\n\n" +
+                "REGISTERING NEW VISITORS\n" +
+                "  • Direct visitors to use the 'Create an Account' button on the login screen.\n\n" +
+                "REPORTS\n" +
+                "  • Click 'View Reports Dashboard' to access the analytics panel.\n" +
+                "  • Visitor, cancellation, and usage reports are available with park filters.";
+        } else {
+            content =
+                "DEPARTMENT MANAGER — QUICK GUIDE\n\n" +
+                "MANAGING ORDERS\n" +
+                "  • Click 'Load All Orders' to view all live bookings.\n" +
+                "  • Columns: Order #, Park, Visitor ID, Date, Time, Visitors, Type, Status, Booked On.\n" +
+                "  • To update: enter Order Number, new Date (YYYY-MM-DD), and visitor count,\n" +
+                "    then click 'Update Order'. Visitor count must be 1–15.\n\n" +
+                "REPORTS DASHBOARD\n" +
+                "  • Click 'View Reports Dashboard' to open the analytics panel.\n\n" +
+                "  Visitor Report\n" +
+                "    Bar chart of daily visitors for the last 30 days,\n" +
+                "    split by Individual/Subscriber vs Group.\n\n" +
+                "  Cancellation Report\n" +
+                "    Table of all CANCELLED and NO_SHOW orders.\n\n" +
+                "  Usage Report\n" +
+                "    Line chart of hourly park capacity utilisation.\n\n" +
+                "  • Use the park filter to narrow any report to a specific park.";
+        }
+        showHelp("GoNature — Help (" + role + ")", content);
     }
 
+    /**
+     * @param title   the dialog header text
+     * @param content the help body text shown in the scrollable text area
+     */
+    private void showHelp(String title, String content) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Help");
+        alert.setHeaderText(title);
+        TextArea ta = new TextArea(content);
+        ta.setEditable(false);
+        ta.setWrapText(true);
+        ta.setPrefRowCount(18);
+        ta.setPrefWidth(480);
+        ta.setStyle("-fx-font-family: 'Segoe UI', Arial, sans-serif; -fx-font-size: 12px;");
+        alert.getDialogPane().setContent(ta);
+        alert.getDialogPane().setMinWidth(520);
+        alert.showAndWait();
+    }
+
+    /**
+     * opens the Reports Dashboard as a modal (no park lock for dept. managers).
+     *
+     * @param event the button-click event
+     */
+    public void handleViewReports(ActionEvent event) {
+        try {
+            Stage reportsStage = new Stage();
+            reportsStage.initModality(Modality.WINDOW_MODAL);
+            reportsStage.initOwner(lblUserName.getScene().getWindow());
+            new ReportsController().start(reportsStage);
+        } catch (Exception e) {
+            lblResult.setText("Error opening reports: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * notifies the server, clears the session, and returns to the login screen.
+     *
+     * @param event the button-click event
+     */
+    @FXML
+    public void handleLogout(ActionEvent event) {
+        if (ClientUI.chat != null) ClientUI.chat.sendLogout();
+        UserSession.clear();
+        Stage stage = (Stage) lblUserName.getScene().getWindow();
+        try {
+            new LoginController().start(stage);
+        } catch (Exception e) {
+            if (ClientUI.chat != null) ClientUI.chat.disconnect();
+            Platform.exit();
+        }
+    }
+
+    /** @param event the button-click event */
+    public void getExitBtn(ActionEvent event) {
+        if (ClientUI.chat != null) ClientUI.chat.disconnect();
+        Platform.exit();
+    }
+
+    /**
+     * @param primaryStage the stage in which to show the screen
+     * @throws Exception if the FXML file cannot be loaded
+     */
     public void start(Stage primaryStage) throws Exception {
         Parent root = FXMLLoader.load(getClass().getResource("/gui/AcademicFrame.fxml"));
         Scene scene = new Scene(root);
-        primaryStage.setTitle("G9 — Client");
+        primaryStage.setTitle("GoNature — Management Dashboard");
         primaryStage.setScene(scene);
         primaryStage.show();
     }

@@ -1,45 +1,89 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<?import java.net.URL?>
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 
 <VBox xmlns:fx="http://javafx.com/fxml/1"
       fx:controller="gui.AcademicFrameController"
-      spacing="12" style="-fx-padding:20; -fx-background-color: linear-gradient(to bottom, #e3f2fd, #bbdefb);" prefWidth="750">
+      styleClass="screen-bg"
+      spacing="0"
+      prefWidth="780">
 
-    <Label text="G9 Prototype — Client"
-           style="-fx-font-size:20px; -fx-font-weight:bold; -fx-text-fill: #0d47a1;"/>
+    <stylesheets>
+        <URL value="@gonature.css"/>
+    </stylesheets>
 
-    <Button text="Load All Orders" onAction="#loadOrders"
-            style="-fx-background-color:#3498db; -fx-text-fill:white; -fx-font-weight:bold; -fx-background-radius:5; -fx-padding: 10 30;"/>
+    <!-- Header bar -->
+    <HBox styleClass="header-bar" alignment="CENTER_LEFT" spacing="10">
+        <Label text="🌿 GoNature" styleClass="header-logo"/>
+        <Region HBox.hgrow="ALWAYS"/>
+        <Label fx:id="lblUserName" styleClass="header-subtitle"/>
+        <Label fx:id="lblUserRole" styleClass="header-badge"/>
+        <Button text="Help ?" onAction="#handleHelp" styleClass="btn-outline"/>
+        <Button text="🚪 Logout" onAction="#handleLogout"
+                style="-fx-background-color: #C62828; -fx-text-fill: white;
+                       -fx-font-weight: bold; -fx-background-radius: 4; -fx-padding: 5 12;"/>
+    </HBox>
 
-    <TableView fx:id="tableOrders" prefHeight="240" style="-fx-background-color: white; -fx-background-radius: 8; -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.1), 10, 0, 0, 2);">
-        <columns>
-            <TableColumn fx:id="colNum"      text="Order #"     prefWidth="90"/>
-            <TableColumn fx:id="colDate"     text="Order Date"  prefWidth="110"/>
-            <TableColumn fx:id="colVisitors" text="Visitors"    prefWidth="90"/>
-            <TableColumn fx:id="colCode"     text="Conf. Code"  prefWidth="100"/>
-            <TableColumn fx:id="colSub"      text="Sub. ID"     prefWidth="90"/>
-            <TableColumn fx:id="colPlaced"   text="Placed Date" prefWidth="110"/>
-        </columns>
-    </TableView>
+    <!-- Main content -->
+    <VBox spacing="16" style="-fx-padding: 24;">
 
-    <VBox spacing="10" style="-fx-padding: 15; -fx-background-color: white; -fx-background-radius: 8; -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.1), 10, 0, 0, 2);">
-        <Label text="Update Order" style="-fx-font-size:14px; -fx-font-weight:bold; -fx-text-fill: #0d47a1;"/>
-        <GridPane hgap="10" vgap="10" style="-fx-padding:5;">
-            <Label text="Order Number:"          GridPane.columnIndex="0" GridPane.rowIndex="0" style="-fx-text-fill: #1976d2; -fx-font-weight:bold;"/>
-            <TextField fx:id="txtOrderNum"        GridPane.columnIndex="1" GridPane.rowIndex="0" prefWidth="200" style="-fx-background-radius: 5;"/>
-            <Label text="New Date (YYYY-MM-DD):"  GridPane.columnIndex="0" GridPane.rowIndex="1" style="-fx-text-fill: #1976d2; -fx-font-weight:bold;"/>
-            <TextField fx:id="txtNewDate"         GridPane.columnIndex="1" GridPane.rowIndex="1" prefWidth="200" style="-fx-background-radius: 5;"/>
-            <Label text="New Visitors:"           GridPane.columnIndex="0" GridPane.rowIndex="2" style="-fx-text-fill: #1976d2; -fx-font-weight:bold;"/>
-            <TextField fx:id="txtNewVisitors"     GridPane.columnIndex="1" GridPane.rowIndex="2" prefWidth="200" style="-fx-background-radius: 5;"/>
-            <Button text="Update" onAction="#updateOrder"
-                    GridPane.columnIndex="1" GridPane.rowIndex="3"
-                    style="-fx-background-color:#e67e22; -fx-text-fill:white; -fx-font-weight:bold; -fx-background-radius:5; -fx-padding: 8 30;"/>
-        </GridPane>
+        <Label text="Management Dashboard" styleClass="screen-title"/>
+
+        <!-- Action row -->
+        <HBox spacing="12">
+            <Button text="🔄  Load All Orders"       onAction="#loadOrders"        styleClass="btn-blue"/>
+            <Button text="📊  View Reports Dashboard" onAction="#handleViewReports" styleClass="btn-teal"/>
+        </HBox>
+
+        <!-- Orders table (live orders) -->
+        <TableView fx:id="tableOrders" prefHeight="240" styleClass="table-view">
+            <columns>
+                <TableColumn fx:id="colId"        text="Order #"   prefWidth="75"/>
+                <TableColumn fx:id="colPark"      text="Park"      prefWidth="100"/>
+                <TableColumn fx:id="colVisitorId" text="Visitor ID" prefWidth="100"/>
+                <TableColumn fx:id="colDate"      text="Date"      prefWidth="98"/>
+                <TableColumn fx:id="colTime"      text="Time"      prefWidth="65"/>
+                <TableColumn fx:id="colVisitors"  text="Visitors"  prefWidth="65"/>
+                <TableColumn fx:id="colType"      text="Type"      prefWidth="95"/>
+                <TableColumn fx:id="colStatus"    text="Status"    prefWidth="95"/>
+                <TableColumn fx:id="colBookedOn"  text="Booked On" prefWidth="130"/>
+            </columns>
+            <placeholder>
+                <Label text="Click 'Load All Orders' to view live bookings."
+                       styleClass="lbl-hint" style="-fx-font-style: italic;"/>
+            </placeholder>
+        </TableView>
+
+        <!-- Update order card -->
+        <VBox spacing="10" styleClass="card">
+            <Label text="Update Order" styleClass="card-title"/>
+            <Separator/>
+            <GridPane hgap="14" vgap="10">
+                <Label text="Order Number *"       styleClass="field-label"
+                       GridPane.columnIndex="0" GridPane.rowIndex="0"/>
+                <TextField fx:id="txtOrderNum"     prefWidth="220"
+                           GridPane.columnIndex="1" GridPane.rowIndex="0"/>
+
+                <Label text="New Date (YYYY-MM-DD) *" styleClass="field-label"
+                       GridPane.columnIndex="0" GridPane.rowIndex="1"/>
+                <TextField fx:id="txtNewDate"      prefWidth="220"
+                           GridPane.columnIndex="1" GridPane.rowIndex="1"/>
+
+                <Label text="New Visitors *"       styleClass="field-label"
+                       GridPane.columnIndex="0" GridPane.rowIndex="2"/>
+                <TextField fx:id="txtNewVisitors"  prefWidth="220"
+                           GridPane.columnIndex="1" GridPane.rowIndex="2"/>
+
+                <Button text="Update Order" onAction="#updateOrder"
+                        styleClass="btn-warning"
+                        GridPane.columnIndex="1" GridPane.rowIndex="3"/>
+            </GridPane>
+        </VBox>
+
+        <Label fx:id="lblResult" text="" styleClass="lbl-success"/>
+
+        <Button text="Exit" onAction="#getExitBtn" styleClass="btn-danger"/>
+
     </VBox>
-
-    <Label fx:id="lblResult" text="" style="-fx-font-style:italic; -fx-text-fill: #27ae60; -fx-font-weight:bold;"/>
-
-    <Button text="Exit" onAction="#getExitBtn"
-            style="-fx-background-color:#e53935; -fx-text-fill:white; -fx-font-weight:bold; -fx-background-radius:5; -fx-padding: 10 30;"/>
 </VBox>
