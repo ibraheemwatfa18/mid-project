@@ -6,5 +6,7 @@
 		</attributes>
 	</classpathentry>
 	<classpathentry kind="src" path="src"/>
+	<classpathentry combineaccessrules="false" kind="src" path="/G9_Prototype_Client"/>
+	<classpathentry combineaccessrules="false" kind="src" path="/G9_Prototype_Server"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
