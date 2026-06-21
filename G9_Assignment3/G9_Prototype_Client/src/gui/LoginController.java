@@ -12,92 +12,154 @@ import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.control.TabPane;
 import javafx.scene.input.MouseEvent;
-import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
 /**
  * FXML controller for the login screen ({@code LoginFrame.fxml}).
  *
- * <p>two modes toggled by radio buttons: visitor (ID number) and staff (username + password).
- * on success, populates {@link UserSession} and routes to the role-appropriate home screen.
+ * <p>single form: visitors and guides enter their ID and leave the password blank;
+ * staff enter a username and password. the system identifies the user type automatically
+ * after the server returns the role; no manual selection needed.
  */
 public class LoginController {
 
-    @FXML private RadioButton rbVisitor;
-    @FXML private RadioButton rbStaff;
-    @FXML private VBox          visitorBox;
-    @FXML private TextField     txtIdNumber;
-    @FXML private VBox          staffBox;
-    @FXML private TextField     txtUsername;
+    @FXML private TabPane       tabPane;
+    @FXML private TextField     txtIdentifier;       // visitor/guide tab
+    @FXML private TextField     txtStaffUsername;    // staff tab
     @FXML private PasswordField txtPassword;
-    @FXML private Label  lblError;
-    @FXML private Button btnLogin;
+    @FXML private TextField     txtPasswordVisible;
+    @FXML private CheckBox      chkShowPassword;
+    @FXML private Label         lblError;
+    @FXML private Button        btnLogin;
+    @FXML private Button        btnTheme;
 
-    /**
-     * shows/hides the visitor or staff input section and clears the error label.
-     *
-     * @param event the radio-button selection event
-     */
+    /** wires the dark-mode toggle so the theme can be switched from the login screen too. */
     @FXML
-    public void onModeChange(ActionEvent event) {
-        boolean isVisitor = rbVisitor.isSelected();
-        visitorBox.setVisible(isVisitor);
-        visitorBox.setManaged(isVisitor);
-        staffBox.setVisible(!isVisitor);
-        staffBox.setManaged(!isVisitor);
-        lblError.setText("");
+    public void initialize() {
+        ThemeManager.installToggle(btnTheme);
+
+        // Pressing Enter in any input field triggers sign-in, same as clicking "Sign In".
+        if (txtIdentifier != null)     txtIdentifier.setOnAction(this::handleLogin);
+        if (txtStaffUsername != null)  txtStaffUsername.setOnAction(this::handleLogin);
+        if (txtPassword != null)       txtPassword.setOnAction(this::handleLogin);
+        if (txtPasswordVisible != null) txtPasswordVisible.setOnAction(this::handleLogin);
+    }
+
+    /** @return true when the Staff tab is the active selection */
+    private boolean isStaffTab() {
+        return tabPane != null && tabPane.getSelectionModel().getSelectedIndex() == 1;
     }
 
     /**
-     * dispatches to {@link #loginAsVisitor()} or {@link #loginAsStaff()}.
+     * routes to visitor or staff login based on whether a password was supplied.
+     * visitors leave the password blank; staff always supply one.
+     * reads from the visible TextField when "Show password" is checked,
+     * otherwise reads from the PasswordField.
      *
      * @param event the button-click event
      */
     @FXML
     public void handleLogin(ActionEvent event) {
         lblError.setText("");
-        if (rbVisitor.isSelected()) loginAsVisitor();
-        else                        loginAsStaff();
+
+        if (isStaffTab()) {
+            String username = txtStaffUsername != null ? txtStaffUsername.getText().trim() : "";
+            String password = chkShowPassword != null && chkShowPassword.isSelected()
+                              ? txtPasswordVisible.getText()
+                              : txtPassword.getText();
+            if (username.isEmpty()) {
+                setError("Please enter your username.");
+                return;
+            }
+            if (password.isEmpty()) {
+                setError("Please enter your password.");
+                return;
+            }
+            loginAsStaff(username, password);
+        } else {
+            String id = txtIdentifier != null ? txtIdentifier.getText().trim() : "";
+            if (id.isEmpty()) {
+                setError("Please enter your ID number.");
+                return;
+            }
+            loginAsVisitor(id);
+        }
     }
 
     /**
-     * validates the visitor ID field and sends a {@code LOGIN_VISITOR} message.
+     * toggles the password field between masked ({@link PasswordField}) and
+     * plain-text ({@link TextField}).
+     * syncs the text content so the value is preserved across toggles.
+     *
+     * @param event the checkbox action event
      */
-    private void loginAsVisitor() {
-        String id = txtIdNumber.getText().trim();
-        if (id.isEmpty()) {
-            setError("Please enter your ID number.");
+    @FXML
+    public void handleShowPassword(ActionEvent event) {
+        if (chkShowPassword.isSelected()) {
+            // Copy masked text into the plain field and swap visibility
+            txtPasswordVisible.setText(txtPassword.getText());
+            txtPassword.setVisible(false);
+            txtPassword.setManaged(false);
+            txtPasswordVisible.setVisible(true);
+            txtPasswordVisible.setManaged(true);
+            txtPasswordVisible.requestFocus();
+            txtPasswordVisible.positionCaret(txtPasswordVisible.getText().length());
+        } else {
+            // Copy plain text back into the password field and swap back
+            txtPassword.setText(txtPasswordVisible.getText());
+            txtPasswordVisible.setVisible(false);
+            txtPasswordVisible.setManaged(false);
+            txtPassword.setVisible(true);
+            txtPassword.setManaged(true);
+            txtPassword.requestFocus();
+            txtPassword.positionCaret(txtPassword.getText().length());
+        }
+    }
+
+    /**
+     * validates the ID format and sends a {@code LOGIN_VISITOR} message.
+     * the server checks guides first, then visitors, so the role is determined automatically.
+     *
+     * @param id the raw identifier entered by the user
+     */
+    private void loginAsVisitor(String id) {
+        if (!id.matches("\\d+")) {
+            setError("ID must contain numbers only.");
             return;
         }
-        if (!id.matches("\\d{5,15}")) {
-            setError("ID number must be 5–15 digits.");
+        if (id.length() != 9) {
+            setError("ID must be exactly 9 digits.");
             return;
         }
         ChatClient.lastLoginResult = null;
         ChatClient.lastLoginError  = null;
         ClientUI.chat.accept(new Message("LOGIN_VISITOR", id));
         if (ChatClient.lastLoginResult != null) onLoginSuccess();
-        else setError(ChatClient.lastLoginError != null
-                ? ChatClient.lastLoginError
-                : "ID not found. Please check your ID number.");
+        else setError("ID not found. Please register first.");
     }
 
     /**
-     * validates the username and password fields and sends a {@code LOGIN_USER} message.
+     * sends a {@code LOGIN_USER} message with the supplied credentials.
+     *
+     * @param username the username entered by the user
+     * @param password the password entered by the user
      */
-    private void loginAsStaff() {
-        String username = txtUsername.getText().trim();
-        String password = txtPassword.getText();
-        if (username.isEmpty()) { setError("Please enter your username."); return; }
-        if (password.isEmpty()) { setError("Please enter your password.");  return; }
+    private void loginAsStaff(String username, String password) {
         ChatClient.lastLoginResult = null;
         ChatClient.lastLoginError  = null;
         ClientUI.chat.accept(new Message("LOGIN_USER", new String[]{username, password}));
-        if (ChatClient.lastLoginResult != null) onLoginSuccess();
-        else setError(ChatClient.lastLoginError != null
-                ? ChatClient.lastLoginError
-                : "Invalid username or password.");
+        if (ChatClient.lastLoginResult != null) {
+            onLoginSuccess();
+        } else {
+            String reason = ChatClient.lastLoginError;
+            if (reason != null && reason.contains("ID not registered")) {
+                setError("Username not found.");
+            } else {
+                setError("Incorrect password. Please try again.");
+            }
+        }
     }
 
     /**
@@ -111,6 +173,7 @@ public class LoginController {
             switch (result.getRole()) {
                 case "VISITOR":
                 case "GUIDE":
+                case "SUBSCRIBER":
                     new VisitorController().start(stage);
                     break;
                 case "PARK_EMPLOYEE":
@@ -118,20 +181,22 @@ public class LoginController {
                     new EmployeeController().start(stage);
                     break;
                 case "DEPARTMENT_MANAGER":
-                case "SERVICE_REP":
                     new AcademicFrameController().start(stage);
                     break;
+                case "SERVICE_REP":
+                    new ServiceRepController().start(stage);
+                    break;
                 default:
-                    setError("Unknown role: " + result.getRole() + ". Contact support.");
+                    setError("Your account role isn't recognised. Please contact support for help.");
             }
         } catch (Exception e) {
-            setError("Error loading screen: " + e.getMessage());
+            setError("Something went wrong while opening your home screen. Please try signing in again.");
             e.printStackTrace();
         }
     }
 
     /**
-     * disconnects cleanly and exits. the server keeps the row marked "Disconnected".
+     * disconnects cleanly and exits the application.
      *
      * @param event the button-click event
      */
@@ -151,7 +216,7 @@ public class LoginController {
         try {
             new RegisterController().start((Stage) btnLogin.getScene().getWindow());
         } catch (Exception e) {
-            setError("Error opening registration form: " + e.getMessage());
+            setError("We couldn't open the registration form. Please try again.");
         }
     }
 
@@ -165,35 +230,25 @@ public class LoginController {
         showHelp("GoNature — Help",
             "Welcome to GoNature — National Park Reservation System\n\n" +
             "VISITOR / GUIDE LOGIN\n" +
-            "  • Enter your government ID number (5–15 digits).\n" +
+            "  • Enter your 9-digit government ID number.\n" +
+            "  • Leave the password field blank.\n" +
             "  • Guides are recognised automatically by their registered ID.\n\n" +
             "STAFF LOGIN\n" +
-            "  • Select the 'Staff Member' option.\n" +
-            "  • Enter your username and password assigned by the system.\n\n" +
+            "  • Enter your assigned username and password.\n" +
+            "  • The system identifies your role automatically after login.\n\n" +
             "NEW USER?\n" +
             "  • Click 'Create an Account' to register as a visitor.\n" +
-            "  • You can also join the Family Member Club during registration.");
+            "  • Family Member Club (subscriber) membership is set up in person by a service representative.");
     }
 
     /**
-     * shows a scrollable help popup — reused for any help content on this screen.
+     * shows a scrollable help popup.
      *
      * @param title   the dialog title
      * @param content the help text to display
      */
     private void showHelp(String title, String content) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle("Help");
-        alert.setHeaderText(title);
-        TextArea ta = new TextArea(content);
-        ta.setEditable(false);
-        ta.setWrapText(true);
-        ta.setPrefRowCount(14);
-        ta.setPrefWidth(440);
-        ta.setStyle("-fx-font-family: 'Segoe UI', Arial, sans-serif; -fx-font-size: 12px;");
-        alert.getDialogPane().setContent(ta);
-        alert.getDialogPane().setMinWidth(480);
-        alert.showAndWait();
+        HelpDialog.show(title, content);
     }
 
     /** @param msg the error text to display */
@@ -206,7 +261,11 @@ public class LoginController {
     public void start(Stage primaryStage) throws Exception {
         Parent root = FXMLLoader.load(getClass().getResource("/gui/LoginFrame.fxml"));
         primaryStage.setTitle("GoNature — Login");
-        primaryStage.setScene(new Scene(root));
+        Scene scene = new Scene(root);
+        ThemeManager.register(scene);   // keep the chosen light/dark theme across logout
+        primaryStage.setScene(scene);
+        primaryStage.centerOnScreen();
         primaryStage.show();
+        Animations.introduce(root);     // subtle fade-and-rise on load
     }
 }

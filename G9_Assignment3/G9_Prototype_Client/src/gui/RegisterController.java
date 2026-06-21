@@ -5,21 +5,25 @@ import client.ClientUI;
 import logic.Message;
 import logic.RegisterRequest;
 import logic.RegisterResult;
+import logic.UserSession;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
-import javafx.scene.layout.VBox;
+import javafx.stage.Modality;
 import javafx.stage.Stage;
 
 /**
  * FXML controller for the visitor registration screen ({@code RegisterFrame.fxml}).
  *
- * <p>collects personal details and optionally subscriber info (family size, credit card).
- * client-side validation mirrors server rules so errors are shown before any network round-trip.
- * on success, shows a confirmation popup and navigates back to the login screen.
+ * <p>collects a new visitor's personal details (ID, name, email, phone) and registers a
+ * plain visitor account. subscriber (Family Member Club) sign-up is intentionally NOT here:
+ * per the GoNature spec it is performed by a service representative, via
+ * {@code ServiceRepController.handleRegisterSubscriber}. client-side validation mirrors the
+ * server rules so errors are shown before any network round-trip. on success, shows a
+ * confirmation popup and navigates back to the login screen.
  */
 public class RegisterController {
 
@@ -28,23 +32,26 @@ public class RegisterController {
     @FXML private TextField txtLastName;
     @FXML private TextField txtEmail;
     @FXML private TextField txtPhone;
-    @FXML private CheckBox  chkSubscriber;
-    @FXML private VBox      subscriberFields;
-    @FXML private TextField txtFamilySize;
-    @FXML private TextField txtCreditCard;
     @FXML private Label     lblError;
+    @FXML private Button    btnTheme;
 
-    /**
-     * shows/hides the subscriber fields when the Family Member Club checkbox is toggled.
-     *
-     * @param event the checkbox action event
-     */
+    /** wires the header dark-mode toggle and phone real-time validation. */
     @FXML
-    public void onSubscriberToggle(ActionEvent event) {
-        boolean checked = chkSubscriber.isSelected();
-        subscriberFields.setVisible(checked);
-        subscriberFields.setManaged(checked);
-        lblError.setText("");
+    public void initialize() {
+        ThemeManager.installToggle(btnTheme);
+
+        // Real-time phone validation: clear error once the field is valid, flag immediately if non-digit typed.
+        txtPhone.textProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal.isEmpty()) return;
+            if (!newVal.matches("\\d*")) {
+                lblError.setText("Phone number must contain numbers only.");
+            } else if (newVal.length() > 10) {
+                // Strip the extra character so the field stays at 10 digits max.
+                txtPhone.setText(oldVal);
+            } else {
+                lblError.setText("");
+            }
+        });
     }
 
     /**
@@ -59,14 +66,17 @@ public class RegisterController {
         // ── Personal information validation ──────────────────────────────────
         String idNumber = txtIdNumber.getText().trim();
         if (idNumber.isEmpty())           { setError("ID number is required.");         return; }
-        if (!idNumber.matches("\\d{5,15}")) { setError("ID number must be 5–15 digits."); return; }
+        if (!idNumber.matches("\\d+"))  { setError("ID number must contain numbers only."); return; }
+        if (idNumber.length() != 9)     { setError("ID number must be exactly 9 digits."); return; }
 
-        String firstName = txtFirstName.getText().trim();
+        String firstName = UserSession.capitalize(txtFirstName.getText().trim());
         if (firstName.isEmpty()) { setError("First name is required."); return; }
+        if (!firstName.matches("[\\p{L} '-]+")) { setError("Name must contain letters only."); return; }
         if (firstName.length() > 50) { setError("First name must be 50 characters or fewer."); return; }
 
-        String lastName = txtLastName.getText().trim();
+        String lastName = UserSession.capitalize(txtLastName.getText().trim());
         if (lastName.isEmpty()) { setError("Last name is required."); return; }
+        if (!lastName.matches("[\\p{L} '-]+")) { setError("Name must contain letters only."); return; }
         if (lastName.length() > 50) { setError("Last name must be 50 characters or fewer."); return; }
 
         String email = txtEmail.getText().trim();
@@ -76,39 +86,16 @@ public class RegisterController {
         }
 
         String phone = txtPhone.getText().trim();
-        if (phone.isEmpty())             { setError("Phone number is required.");         return; }
-        if (!phone.matches("\\d{9,15}")) { setError("Phone must be 9–15 digits only.");   return; }
-
-        // ── Subscriber validation ────────────────────────────────────────────
-        boolean subscriber = chkSubscriber.isSelected();
-        String  creditCard = null;
-        int     familySize = 0;
-
-        if (subscriber) {
-            String fs = txtFamilySize.getText().trim();
-            if (fs.isEmpty()) { setError("Please enter the family size."); return; }
-            try {
-                familySize = Integer.parseInt(fs);
-                if (familySize < 1 || familySize > 10) {
-                    setError("Family size must be between 1 and 10."); return;
-                }
-            } catch (NumberFormatException e) {
-                setError("Family size must be a whole number."); return;
-            }
-
-            String cc = txtCreditCard.getText().trim();
-            if (!cc.isEmpty()) {
-                if (!cc.matches("\\d{16}")) {
-                    setError("Credit card must be exactly 16 digits (or leave it blank)."); return;
-                }
-                creditCard = cc;
-            }
-        }
+        if (phone.isEmpty())           { setError("Phone number is required.");                      return; }
+        if (!phone.matches("\\d+"))    { setError("Phone number must contain numbers only.");        return; }
+        if (phone.length() != 10)      { setError("Phone number must be exactly 10 digits.");        return; }
 
         // ── Send to server ───────────────────────────────────────────────────
+        // Plain visitor account only. Subscriber sign-up is handled by a service rep
+        // (ServiceRepController.handleRegisterSubscriber), so these are always non-subscriber.
         RegisterRequest req = new RegisterRequest(
             idNumber, firstName, lastName, email, phone,
-            subscriber, creditCard, familySize);
+            false, null, 0);
 
         ChatClient.lastRegisterResult = null;
         ChatClient.lastRegisterError  = null;
@@ -134,23 +121,19 @@ public class RegisterController {
         StringBuilder msg = new StringBuilder();
         msg.append("Your account has been created successfully!\n\n");
         msg.append("Your ID number: ").append(idNumber).append("\n");
-        if (result.getSubscriberId() != null) {
-            msg.append("Subscriber ID:  ").append(result.getSubscriberId()).append("\n");
-            msg.append("\nPlease save your subscriber ID — you will need it\n")
-               .append("when booking as a Family Member Club subscriber.");
-        }
         msg.append("\n\nYou can now log in with your ID number.");
 
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("Registration Successful");
         alert.setHeaderText("Welcome to GoNature!");
         alert.setContentText(msg.toString());
+        ThemeManager.styleDialog(alert);
         alert.showAndWait();
 
-        navigateToLogin();
+        closeOrReturn();
     }
 
-    /** navigates back to the login screen. */
+    /** navigates back to the login screen, reusing the current window. */
     private void navigateToLogin() {
         try {
             new LoginController().start((Stage) lblError.getScene().getWindow());
@@ -160,13 +143,29 @@ public class RegisterController {
     }
 
     /**
-     * cancels registration and returns to the login screen.
+     * leaves the registration form. when the form was opened in its own modal window
+     * (e.g. a service rep registering a visitor from the desk) it simply closes that
+     * window; when it was opened inside the main login window (the "Create an Account"
+     * flow) it returns to the login screen.
+     */
+    private void closeOrReturn() {
+        Stage stage = (Stage) lblError.getScene().getWindow();
+        if (stage != null && stage.getModality() != Modality.NONE) {
+            stage.close();        // standalone modal, just close it
+        } else {
+            navigateToLogin();    // opened in the login window, go back to login
+        }
+    }
+
+    /**
+     * cancels registration: closes the modal if opened standalone, otherwise
+     * returns to the login screen.
      *
      * @param event the button-click event
      */
     @FXML
     public void handleCancel(ActionEvent event) {
-        navigateToLogin();
+        closeOrReturn();
     }
 
     /** @param msg the error text to display */
@@ -179,7 +178,10 @@ public class RegisterController {
     public void start(Stage stage) throws Exception {
         Parent root = FXMLLoader.load(getClass().getResource("/gui/RegisterFrame.fxml"));
         stage.setTitle("GoNature — Create Account");
-        stage.setScene(new Scene(root));
+        Scene scene = new Scene(root);
+        ThemeManager.register(scene);
+        stage.setScene(scene);
+        stage.centerOnScreen();
         stage.show();
     }
 }

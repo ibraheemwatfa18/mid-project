@@ -8,6 +8,7 @@ import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
+import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
@@ -24,12 +25,13 @@ import javafx.stage.Stage;
  */
 public class BookingConfirmationController {
 
+    @FXML private Button btnTheme;
     @FXML private VBox  bannerBox;
     @FXML private Label lblStatusIcon;
     @FXML private Label lblStatusTitle;
     @FXML private Label lblBookingId;
 
-    // entry pass — only shown for CONFIRMED bookings
+    // entry pass, only shown for CONFIRMED bookings
     @FXML private VBox  paneEntryPass;
     @FXML private VBox  paneQR;
     @FXML private Label lblEntryCode;
@@ -42,13 +44,20 @@ public class BookingConfirmationController {
     @FXML private Label lblEmail;
     @FXML private Label lblEmailNote;
 
+    // promotion price card, only shown when an active promotion was applied
+    @FXML private VBox  panePromo;
+    @FXML private Label lblPromoTag;
+    @FXML private Label lblPromoDesc;
+    @FXML private Label lblPriceOriginal;
+    @FXML private Label lblPriceFinal;
+
     /**
      * called by the FXMLLoader after all {@code @FXML} fields have been injected.
-     * nothing to do here — all data-binding is done in {@link #populate(BookingResult)}
+     * nothing to do here; all data-binding is done in {@link #populate(BookingResult)}
      * which is called explicitly by {@link BookingController} after loading.
      */
     @FXML
-    public void initialize() { /* injection complete — waiting for populate() */ }
+    public void initialize() { ThemeManager.installToggle(btnTheme); }
 
     /**
      * binds the booking result to all detail labels and, for confirmed bookings,
@@ -60,7 +69,10 @@ public class BookingConfirmationController {
     public void populate(BookingResult r) {
         boolean isWaiting = "WAITING".equals(r.getStatus());
         if (isWaiting) {
-            bannerBox.setStyle(bannerBox.getStyle().replace("#2e7d32", "#e65100"));
+            // swap the banner from the confirmed (pine) to the waiting (gold) style class
+            bannerBox.getStyleClass().remove("banner-confirmed");
+            if (!bannerBox.getStyleClass().contains("banner-waiting"))
+                bannerBox.getStyleClass().add("banner-waiting");
             lblStatusIcon.setText("⏳");
             lblStatusTitle.setText("Added to Waiting List");
             lblBookingId.setText("Waiting List Reference: #" + r.getId());
@@ -75,7 +87,7 @@ public class BookingConfirmationController {
                 "A confirmation email will be sent to the address below. " +
                 "Please arrive 15 minutes before your scheduled time.");
 
-            // generate the entry pass right now — not on button click
+            // generate the entry pass right now, not on button click
             generateEntryPass(r);
         }
 
@@ -85,6 +97,19 @@ public class BookingConfirmationController {
         lblVisitors.setText(r.getNumVisitors() + " visitor" + (r.getNumVisitors() > 1 ? "s" : ""));
         lblType.setText(r.getOrderType());
         lblEmail.setText(r.getEmail());
+
+        // Promotion price card, only for confirmed bookings that carry an active promotion.
+        if (!isWaiting && r.hasPromotion()) {
+            lblPromoTag.setText(String.format("Promotion Applied: %.0f%% off", r.getPromoPercent()));
+            lblPromoDesc.setText(r.getPromoDescription());
+            lblPriceOriginal.setText(String.format("$%.2f", r.getBasePrice()));
+            lblPriceFinal.setText(String.format("$%.2f", r.getFinalPrice()));
+            panePromo.setVisible(true);
+            panePromo.setManaged(true);
+        } else {
+            panePromo.setVisible(false);
+            panePromo.setManaged(false);
+        }
     }
 
     /**
@@ -102,7 +127,7 @@ public class BookingConfirmationController {
         // draw the QR grid (8 px per module → 168 × 168 px total)
         Canvas qr = QRCodeUtil.generate(payload, 8);
 
-        // thin black border — matches the style in the help dialog
+        // thin black border, matches the style in the help dialog
         StackPane qrFrame = new StackPane(qr);
         qrFrame.setStyle("-fx-border-color: #1A1A1A; -fx-border-width: 2;"
                        + "-fx-background-color: white; -fx-padding: 6;");

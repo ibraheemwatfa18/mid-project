@@ -7,7 +7,7 @@
       fx:controller="gui.EmployeeController"
       styleClass="screen-bg"
       spacing="0"
-      prefWidth="540" prefHeight="520">
+      prefWidth="820" prefHeight="600">
 
     <stylesheets>
         <URL value="@gonature.css"/>
@@ -17,13 +17,13 @@
     <HBox styleClass="header-bar" alignment="CENTER_LEFT" spacing="10">
         <Label text="🌿 GoNature" styleClass="header-logo"/>
         <Region HBox.hgrow="ALWAYS"/>
+        <Label fx:id="lblSessionTimer" styleClass="header-timer" text="Session: 00:00:00"/>
         <Label fx:id="lblParkBadge" styleClass="header-badge"/>
         <Label fx:id="lblRoleBadge" styleClass="header-badge"/>
+        <Button fx:id="btnTheme" text="🌙" onAction="#handleToggleTheme" styleClass="btn-outline"/>
         <Button text="Help ?"  onAction="#handleHelp"   styleClass="btn-outline"/>
-        <Button text="Logout"  onAction="#handleLogout"
-                style="-fx-background-color:#C62828; -fx-text-fill:white;
-                       -fx-font-weight:bold; -fx-background-radius:5;
-                       -fx-padding:5 14; -fx-cursor:hand;"/>
+        <Button text="Logout"  onAction="#handleLogout" styleClass="btn-danger"
+                style="-fx-font-size:12px; -fx-padding:5 14; -fx-background-radius:6;"/>
     </HBox>
 
     <!-- Content -->
@@ -32,9 +32,12 @@
         <Label fx:id="lblWelcome" styleClass="screen-title"/>
 
         <!-- Action card -->
-        <VBox spacing="12" styleClass="card" maxWidth="440">
+        <VBox spacing="12" styleClass="card" maxWidth="560">
 
             <Label fx:id="lblInfo" styleClass="screen-subtitle" wrapText="true"/>
+
+            <Label fx:id="lblStats" wrapText="true"
+                   styleClass="stat-strip" maxWidth="Infinity"/>
 
             <Separator/>
 
@@ -50,6 +53,14 @@
             <Button fx:id="btnReports" text="📊  View Park Reports"
                     maxWidth="Infinity" onAction="#handleViewReports"
                     disable="true" styleClass="btn-teal"/>
+
+            <Button fx:id="btnParkSettings" text="⚙️  Park Settings"
+                    maxWidth="Infinity" onAction="#handleParkSettings"
+                    disable="true" styleClass="btn-secondary"/>
+
+            <Button fx:id="btnPromotions" text="🎉  Promotions"
+                    maxWidth="Infinity" onAction="#handlePromotions"
+                    disable="true" styleClass="btn-secondary"/>
         </VBox>
     </VBox>
 </VBox>

@@ -1,19 +1,25 @@
 package gui;
 
+import client.ChatClient;
 import client.ClientUI;
+import logic.Message;
+import logic.OrderDetail;
+import logic.Park;
 import logic.UserSession;
+import java.util.List;
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
-import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
-import javafx.scene.control.TextArea;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 
 /**
  * controller for the park employee / manager home screen ({@code EmployeeFrame.fxml}).
@@ -32,7 +38,20 @@ public class EmployeeController {
     @FXML private Label  lblRoleBadge;
     @FXML private Label  lblParkBadge;
     @FXML private Label  lblInfo;
+    @FXML private Label  lblStats;
     @FXML private Button btnReports;
+    @FXML private Button btnParkSettings;
+    @FXML private Button btnPromotions;
+
+    // header controls
+    @FXML private Label  lblSessionTimer;
+    @FXML private Button btnTheme;
+
+    /** background ticker that refreshes the live stats strip every 30 seconds. */
+    private Timeline statsTimeline;
+
+    /** ticks once a second to refresh the logged-in-duration label in the header. */
+    private Timeline sessionTimeline;
 
     /**
      * populates welcome/role/park labels and enables the Reports button only for PARK_MANAGER.
@@ -49,12 +68,146 @@ public class EmployeeController {
                 "As a park manager you can view and edit park parameters,\n" +
                 "manage reservations, and generate reports for your park.");
             btnReports.setDisable(false);
+            btnParkSettings.setDisable(false);
+            btnPromotions.setDisable(false);
         } else {
             lblInfo.setText(
                 "As a park employee you can manage visitor check-ins,\n" +
                 "handle the waiting list, and process daily reservations.");
-            // btnReports is disabled by default in FXML — employees can't access reports
+            // btnReports is disabled by default in FXML; employees can't access reports
         }
+
+        ThemeManager.installToggle(btnTheme);
+        startSessionTimer();
+
+        loadStats();
+        startStatsAutoRefresh();
+    }
+
+    // ── Header: theme toggle + session timer ──────────────────────────────────
+
+    /**
+     * flips the whole app between light and dark mode and updates this button's icon.
+     *
+     * @param event the button-click event
+     */
+    @FXML
+    public void handleToggleTheme(ActionEvent event) {
+        ThemeManager.toggle();
+        if (btnTheme != null) btnTheme.setText(ThemeManager.iconText());
+    }
+
+    /**
+     * starts a 1-second ticker that keeps the "Session: HH:MM:SS" header label current.
+     * the window-close handler installed by {@link #startStatsAutoRefresh()} stops this
+     * ticker along with the stats ticker.
+     */
+    private void startSessionTimer() {
+        if (lblSessionTimer == null) return;
+        updateSessionTimer(); // show 00:00:00 immediately
+        sessionTimeline = new Timeline(new KeyFrame(Duration.seconds(1), e -> updateSessionTimer()));
+        sessionTimeline.setCycleCount(Timeline.INDEFINITE);
+        sessionTimeline.play();
+    }
+
+    /** writes the current elapsed session time into the header label. */
+    private void updateSessionTimer() {
+        UserSession s = UserSession.getInstance();
+        if (s != null && lblSessionTimer != null)
+            lblSessionTimer.setText("Session: " + s.getSessionDuration());
+    }
+
+    /** stops and releases the session-timer ticker if it's running. */
+    private void stopSessionTimer() {
+        if (sessionTimeline != null) {
+            sessionTimeline.stop();
+            sessionTimeline = null;
+        }
+    }
+
+    /**
+     * starts a 30-second background ticker that re-runs {@link #loadStats()} so the live
+     * stats strip stays current without a logout/login. the {@link Timeline} runs on the
+     * JavaFX application thread, and is stopped on logout, exit, or window close via
+     * {@link #stopStatsTimeline()}.
+     */
+    private void startStatsAutoRefresh() {
+        if (lblStats == null) return;
+        statsTimeline = new Timeline(new KeyFrame(Duration.seconds(30), e -> loadStats()));
+        statsTimeline.setCycleCount(Timeline.INDEFINITE);
+        statsTimeline.play();
+
+        // stop both tickers if the window is closed outright (logout/exit handle the other cases)
+        lblStats.sceneProperty().addListener((obs, oldScene, newScene) -> {
+            if (newScene != null) {
+                newScene.windowProperty().addListener((o2, oldWin, newWin) -> {
+                    if (newWin != null) newWin.setOnHidden(ev -> {
+                        stopStatsTimeline();
+                        stopSessionTimer();
+                    });
+                });
+            }
+        });
+    }
+
+    /** stops and releases the stats auto-refresh ticker if it's running. */
+    private void stopStatsTimeline() {
+        if (statsTimeline != null) {
+            statsTimeline.stop();
+            statsTimeline = null;
+        }
+    }
+
+    /**
+     * fetches a compact live snapshot for the employee's assigned park and renders it
+     * in the stats strip: today's booking count, visitors currently inside, and the
+     * resulting capacity utilisation percentage. hides the strip if no park is assigned
+     * or the data can't be loaded.
+     */
+    private void loadStats() {
+        if (lblStats == null) return;
+        UserSession s = UserSession.getInstance();
+        Integer parkId = (s != null) ? s.getParkId() : null;
+        if (parkId == null) { hideStats(); return; }
+
+        // 1) today's bookings for this park
+        ChatClient.lastTodayOrders = null;
+        ClientUI.chat.accept(new Message("GET_TODAY_ORDERS", parkId));
+        List<OrderDetail> today = ChatClient.lastTodayOrders;
+        int todayCount = (today != null) ? today.size() : 0;
+
+        // 2) visitors currently inside (checked-in, not yet exited)
+        ChatClient.lastParkOccupancy = null;
+        ClientUI.chat.accept(new Message("GET_PARK_OCCUPANCY", parkId));
+        int inside = (ChatClient.lastParkOccupancy != null) ? ChatClient.lastParkOccupancy : 0;
+
+        // 3) park capacity (from the parks list) to compute utilisation
+        int capacity = 0;
+        ChatClient.lastParkList = null;
+        ClientUI.chat.accept(new Message("GET_PARKS", null));
+        List<Park> parks = ChatClient.lastParkList;
+        if (parks != null) {
+            for (Park p : parks) {
+                if (p.getId() == parkId) {
+                    capacity = p.getCapacity();
+                    s.setParkName(p.getName());
+                    if (lblParkBadge != null) lblParkBadge.setText(p.getName());
+                    break;
+                }
+            }
+        }
+
+        int pct = (capacity > 0) ? (int) Math.round(inside * 100.0 / capacity) : 0;
+        lblStats.setText(
+            "📅 Today's bookings: " + todayCount
+            + "      👥 Currently inside: " + inside
+            + "      🏕 Capacity: " + pct + "%");
+    }
+
+    /** collapses the stats strip when there's nothing meaningful to show. */
+    private void hideStats() {
+        lblStats.setVisible(false);
+        lblStats.setManaged(false);
     }
 
     // ── Button handlers ───────────────────────────────────────────────────────
@@ -94,6 +247,26 @@ public class EmployeeController {
                   "GoNature — Park Reports");
     }
 
+    /**
+     * opens the Park Settings panel so the manager can edit capacity, max orders,
+     * visit duration, and full price for their assigned park.
+     */
+    @FXML
+    public void handleParkSettings(ActionEvent event) {
+        openModal(stage -> new ParkSettingsController().start(stage),
+                  "GoNature — Park Settings");
+    }
+
+    /**
+     * opens the Promotions panel so the manager can propose discount promotions for their
+     * assigned park. Promotions require department manager approval before they affect pricing.
+     */
+    @FXML
+    public void handlePromotions(ActionEvent event) {
+        openModal(stage -> new PromotionsController().start(stage),
+                  "GoNature — Promotions");
+    }
+
     // ── Utility ───────────────────────────────────────────────────────────────
 
     /** lambda that opens a screen into a given stage; may throw on FXML load failure. */
@@ -124,6 +297,8 @@ public class EmployeeController {
     /** @param event the button-click event */
     @FXML
     public void handleExit(ActionEvent event) {
+        stopStatsTimeline();
+        stopSessionTimer();
         if (ClientUI.chat != null) ClientUI.chat.disconnect();
         Platform.exit();
     }
@@ -151,13 +326,17 @@ public class EmployeeController {
                 "  • Click 'View Park Reports' to open your park's analytics.\n" +
                 "  • The park filter is locked to your park automatically.\n" +
                 "  • Visitor Report: daily visitor counts split by booking type.\n" +
-                "  • Cancellation Report: all cancelled and no-show orders.\n" +
+                "  • Cancellation Report: cancelled and no-show orders, plus a day-of-week\n" +
+                "    distribution chart with average cancellations per weekday.\n" +
                 "  • Usage Report: hourly park capacity utilisation.\n\n" +
                 "PRICING (ENTRY CONTROL)\n" +
-                "  • Pre-booked INDIVIDUAL/FAMILY: 15% discount.\n" +
-                "  • Walk-in INDIVIDUAL/FAMILY: full price.\n" +
-                "  • Pre-booked GROUP: guide free + 25% + 12% advance discount.\n" +
-                "  • Walk-in GROUP: guide free + 25% discount.";
+                "  • Pre-booked SOLO or FAMILY: 15% advance discount.\n" +
+                "  • Pre-booked GROUP (guide-led): guide enters free + 25%+12% advance discount\n" +
+                "    (about 34% off) for the rest of the group.\n" +
+                "  • Walk-in SOLO — subscriber: 10% discount (Family Member Club benefit).\n" +
+                "  • Walk-in SOLO — regular visitor: full price.\n" +
+                "  • Walk-in GROUP (guide-led): guide pays; 10% discount applies to everyone\n" +
+                "    including the guide.";
         } else {
             content =
                 "PARK EMPLOYEE — QUICK GUIDE\n\n" +
@@ -167,7 +346,9 @@ public class EmployeeController {
                 "  • Click 'Entry Control (Check-In / Exit)' then go to the Check-In tab.\n" +
                 "  • Enter the visitor's ID number and select the park.\n" +
                 "  • Pre-booked visitors: the system finds today's confirmed booking automatically.\n" +
-                "  • Walk-in visitors: also enter number of visitors and order type, then click Check In.\n\n" +
+                "  • Walk-in visitors: also enter number of visitors and order type, then click Check In.\n" +
+                "  • Unknown visitor ID: if the visitor has no account, the system creates a minimal\n" +
+                "    record automatically — no pre-registration needed.\n\n" +
                 "REGISTERING AN EXIT\n" +
                 "  • Go to the 'Register Exit' tab.\n" +
                 "  • Enter the visitor's ID number and click 'Register Exit'.\n\n" +
@@ -186,18 +367,7 @@ public class EmployeeController {
      * @param content the help body text shown in the scrollable text area
      */
     private void showHelp(String title, String content) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle("Help");
-        alert.setHeaderText(title);
-        TextArea ta = new TextArea(content);
-        ta.setEditable(false);
-        ta.setWrapText(true);
-        ta.setPrefRowCount(20);
-        ta.setPrefWidth(480);
-        ta.setStyle("-fx-font-family: 'Segoe UI', Arial, sans-serif; -fx-font-size: 12px;");
-        alert.getDialogPane().setContent(ta);
-        alert.getDialogPane().setMinWidth(520);
-        alert.showAndWait();
+        HelpDialog.show(title, content);
     }
 
     /**
@@ -205,6 +375,8 @@ public class EmployeeController {
      */
     @FXML
     public void handleLogout(ActionEvent event) {
+        stopStatsTimeline();
+        stopSessionTimer();   // stop before clearing the session so the clock doesn't tick on a null user
         if (ClientUI.chat != null) ClientUI.chat.sendLogout();
         UserSession.clear();
         Stage stage = (Stage) lblWelcome.getScene().getWindow();
@@ -223,7 +395,11 @@ public class EmployeeController {
     public void start(Stage primaryStage) throws Exception {
         Parent root = FXMLLoader.load(getClass().getResource("/gui/EmployeeFrame.fxml"));
         primaryStage.setTitle("GoNature — " + UserSession.getInstance().getRole());
-        primaryStage.setScene(new Scene(root));
+        Scene scene = new Scene(root);
+        ThemeManager.register(scene);   // apply the current light/dark theme to this screen
+        primaryStage.setScene(scene);
+        primaryStage.centerOnScreen();
         primaryStage.show();
+        Animations.introduce(root);     // subtle fade-and-rise on load
     }
 }
